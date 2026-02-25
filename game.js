@@ -2,6 +2,8 @@
  * PracticeWordle — game.js
  * Core game logic: unlimited Wordle with state persistence,
  * word tracking, shuffle, dark mode, and faithful animations.
+ *
+ * Dictionary is loaded asynchronously from words.txt.
  */
 
 'use strict';
@@ -25,6 +27,9 @@ let state = {
     rowIndex: 0,
 };
 
+// Populated asynchronously from words.txt
+let WORD_LIST = [];
+
 // ── DOM References ──────────────────────────────────────────────────────────
 const board = document.getElementById('board');
 const keyboardEl = document.getElementById('keyboard');
@@ -38,22 +43,52 @@ const btnDarkMode = document.getElementById('btn-dark-mode');
 const iconMoon = document.getElementById('icon-moon');
 const iconSun = document.getElementById('icon-sun');
 
-// ── Utility: shuffled unused word ──────────────────────────────────────────
-function getUsedWords() {
+// ── Load Dictionary ─────────────────────────────────────────────────────────
+/**
+ * Fetches words.txt and parses it into a deduped array of valid 5-letter
+ * lowercase words, then calls init() to start the game.
+ *
+ * Performance note: words.txt is ~130 KB, fetched once and then cached by
+ * the browser. Parsing overhead vs a pre-built JS array is <10 ms.
+ */
+async function loadWordList() {
     try {
-        return JSON.parse(localStorage.getItem(LS_USED_KEY)) || [];
-    } catch { return []; }
+        const res = await fetch('words.txt');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+
+        WORD_LIST = [
+            ...new Set(
+                text
+                    .split(/[\r\n]+/)
+                    .map(w => w.trim().toLowerCase().replace(/[^a-z]/g, ''))
+                    .filter(w => w.length === WORD_LENGTH)
+            ),
+        ];
+
+        if (WORD_LIST.length === 0) throw new Error('Word list is empty after filtering');
+        console.log(`[PracticeWordle] ${WORD_LIST.length} words loaded`);
+        init();
+    } catch (err) {
+        console.error('[PracticeWordle] Failed to load words.txt:', err);
+        showToast('Failed to load dictionary — please refresh.', 5000);
+    }
+}
+
+// ── Used-word tracking ──────────────────────────────────────────────────────
+function getUsedWords() {
+    try { return JSON.parse(localStorage.getItem(LS_USED_KEY)) || []; }
+    catch { return []; }
 }
 
 function addUsedWord(word) {
     const used = getUsedWords();
     if (!used.includes(word)) used.push(word);
-    // If all words used, reset the pool
-    if (used.length >= WORD_LIST.length) {
-        localStorage.setItem(LS_USED_KEY, JSON.stringify([]));
-    } else {
-        localStorage.setItem(LS_USED_KEY, JSON.stringify(used));
-    }
+    // Reset pool when all words have been seen
+    localStorage.setItem(
+        LS_USED_KEY,
+        JSON.stringify(used.length >= WORD_LIST.length ? [] : used)
+    );
 }
 
 function pickNewWord() {
@@ -71,14 +106,12 @@ function saveState() {
 function loadState() {
     try {
         const saved = JSON.parse(localStorage.getItem(LS_STATE_KEY));
-        if (saved && saved.answer && WORD_LIST.includes(saved.answer)) {
-            return saved;
-        }
+        if (saved && saved.answer && WORD_LIST.includes(saved.answer)) return saved;
     } catch { }
     return null;
 }
 
-// ── Board Rendering ─────────────────────────────────────────────────────────
+// ── Board ───────────────────────────────────────────────────────────────────
 let tileEls = []; // [row][col]
 
 function buildBoard() {
@@ -94,7 +127,6 @@ function buildBoard() {
             const tile = document.createElement('div');
             tile.classList.add('tile');
             tile.dataset.state = 'empty';
-            tile.dataset.animation = 'idle';
             tile.setAttribute('role', 'img');
             tile.setAttribute('aria-label', `${ordinal(c + 1)} letter, empty`);
             rowEl.appendChild(tile);
@@ -111,29 +143,21 @@ function ordinal(n) {
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-// ── Restoring State ─────────────────────────────────────────────────────────
 function restoreBoard() {
     for (let r = 0; r < state.guesses.length; r++) {
         const guess = state.guesses[r];
         const evals = state.evaluations[r];
-        // Fill tiles
         for (let c = 0; c < WORD_LENGTH; c++) {
             const tile = tileEls[r][c];
             tile.textContent = guess[c].toUpperCase();
             tile.setAttribute('aria-label', `${ordinal(c + 1)} letter, ${guess[c]}, ${evals[c]}`);
             tile.dataset.state = evals[c];
-        }
-        // Update keyboard
-        for (let c = 0; c < WORD_LENGTH; c++) {
             updateKeyState(guess[c], evals[c]);
         }
     }
-    if (state.gameOver) {
-        setTimeout(() => showGameOver(), 200);
-    }
+    if (state.gameOver) setTimeout(showGameOver, 200);
 }
 
-// ── Current Row Rendering ───────────────────────────────────────────────────
 function renderCurrentGuess() {
     const row = tileEls[state.rowIndex];
     if (!row) return;
@@ -141,28 +165,19 @@ function renderCurrentGuess() {
         const tile = row[c];
         const letter = state.currentGuess[c] || '';
         tile.textContent = letter.toUpperCase();
-        if (letter) {
-            tile.dataset.state = 'tbd';
-            tile.setAttribute('aria-label', `${ordinal(c + 1)} letter, ${letter}`);
-        } else {
-            tile.dataset.state = 'empty';
-            tile.setAttribute('aria-label', `${ordinal(c + 1)} letter, empty`);
-        }
+        tile.dataset.state = letter ? 'tbd' : 'empty';
+        tile.setAttribute('aria-label',
+            letter ? `${ordinal(c + 1)} letter, ${letter}` : `${ordinal(c + 1)} letter, empty`);
     }
 }
 
-// ── Input Handling ──────────────────────────────────────────────────────────
+// ── Input ───────────────────────────────────────────────────────────────────
 function handleKey(key) {
     if (state.gameOver) return;
     const k = key.toLowerCase();
-
-    if (k === 'enter') {
-        submitGuess();
-    } else if (k === 'backspace') {
-        deleteLetter();
-    } else if (/^[a-z]$/.test(k)) {
-        addLetter(k);
-    }
+    if (k === 'enter') submitGuess();
+    else if (k === 'backspace') deleteLetter();
+    else if (/^[a-z]$/.test(k)) addLetter(k);
 }
 
 function addLetter(letter) {
@@ -177,7 +192,7 @@ function addLetter(letter) {
 }
 
 function deleteLetter() {
-    if (state.currentGuess.length === 0) return;
+    if (!state.currentGuess.length) return;
     const col = state.currentGuess.length - 1;
     const tile = tileEls[state.rowIndex][col];
     tile.textContent = '';
@@ -195,47 +210,38 @@ function submitGuess() {
         shakeRow(state.rowIndex);
         return;
     }
-
-    if (!WORD_LIST.includes(guess.toLowerCase())) {
+    if (!WORD_LIST.includes(guess)) {
         showToast('Not in word list');
         shakeRow(state.rowIndex);
         return;
     }
 
-    // Evaluate
     const evaluation = evaluateGuess(guess, state.answer);
-
-    // Update state
     state.guesses.push(guess);
     state.evaluations.push(evaluation);
     state.currentGuess = '';
 
-    // Animate row reveal
     revealRow(state.rowIndex, guess, evaluation, () => {
-        // Update keyboard after reveal
-        for (let c = 0; c < WORD_LENGTH; c++) {
-            updateKeyState(guess[c], evaluation[c]);
-        }
+        for (let c = 0; c < WORD_LENGTH; c++) updateKeyState(guess[c], evaluation[c]);
 
         const won = evaluation.every(e => e === 'correct');
         state.rowIndex++;
 
         if (won) {
-            state.gameOver = true;
-            state.gameWon = true;
+            state.gameOver = state.gameWon = true;
             addUsedWord(state.answer);
             saveState();
             setTimeout(() => {
                 bounceRow(state.rowIndex - 1);
                 showToast(winMessage(state.rowIndex));
-                setTimeout(() => showGameOver(), 1600);
+                setTimeout(showGameOver, 1600);
             }, 100);
         } else if (state.rowIndex >= MAX_GUESSES) {
             state.gameOver = true;
             state.gameWon = false;
             addUsedWord(state.answer);
             saveState();
-            setTimeout(() => showGameOver(), 500);
+            setTimeout(showGameOver, 500);
         } else {
             saveState();
         }
@@ -248,7 +254,7 @@ function evaluateGuess(guess, answer) {
     const guessLetters = guess.split('');
     const used = Array(WORD_LENGTH).fill(false);
 
-    // First pass: correct
+    // Pass 1 — correct position
     for (let i = 0; i < WORD_LENGTH; i++) {
         if (guessLetters[i] === answerLetters[i]) {
             result[i] = 'correct';
@@ -256,7 +262,7 @@ function evaluateGuess(guess, answer) {
             answerLetters[i] = null;
         }
     }
-    // Second pass: present
+    // Pass 2 — present but wrong position
     for (let i = 0; i < WORD_LENGTH; i++) {
         if (result[i] === 'correct') continue;
         for (let j = 0; j < WORD_LENGTH; j++) {
@@ -274,7 +280,7 @@ function evaluateGuess(guess, answer) {
 // ── Animations ──────────────────────────────────────────────────────────────
 function animatePop(tile) {
     tile.classList.remove('pop');
-    void tile.offsetWidth; // reflow
+    void tile.offsetWidth;
     tile.classList.add('pop');
     tile.addEventListener('animationend', () => tile.classList.remove('pop'), { once: true });
 }
@@ -289,9 +295,7 @@ function shakeRow(rowIndex) {
 }
 
 function bounceRow(rowIndex) {
-    const tiles = tileEls[rowIndex];
-    if (!tiles) return;
-    tiles.forEach((tile, i) => {
+    (tileEls[rowIndex] || []).forEach((tile, i) => {
         setTimeout(() => {
             tile.classList.add('bounce');
             tile.addEventListener('animationend', () => tile.classList.remove('bounce'), { once: true });
@@ -305,42 +309,35 @@ function revealRow(rowIndex, guess, evaluation, callback) {
 
     tiles.forEach((tile, i) => {
         setTimeout(() => {
-            // Flip out
             tile.classList.add('flip-out');
-
             setTimeout(() => {
-                // Apply state mid-flip
                 tile.dataset.state = evaluation[i];
                 tile.setAttribute('aria-label',
                     `${ordinal(i + 1)} letter, ${guess[i]}, ${evaluation[i]}`);
                 tile.classList.remove('flip-out');
                 tile.classList.add('flip-in');
-                tile.addEventListener('animationend', () => tile.classList.remove('flip-in'), { once: true });
+                tile.addEventListener('animationend',
+                    () => tile.classList.remove('flip-in'), { once: true });
             }, FLIP_DURATION / 2);
 
-            if (i === WORD_LENGTH - 1) {
-                setTimeout(() => callback(), FLIP_DURATION);
-            }
+            if (i === WORD_LENGTH - 1) setTimeout(callback, FLIP_DURATION);
         }, i * GUESS_DELAY);
     });
 }
 
-// ── Keyboard State ──────────────────────────────────────────────────────────
+// ── Keyboard state ──────────────────────────────────────────────────────────
 function updateKeyState(letter, evaluation) {
     const key = keyboardEl.querySelector(`[data-key="${letter.toLowerCase()}"]`);
     if (!key) return;
-    const current = key.dataset.state;
-    // Priority: correct > present > absent
     const priority = { correct: 3, present: 2, absent: 1 };
-    if (!current || (priority[evaluation] > (priority[current] || 0))) {
+    const current = key.dataset.state;
+    if (!current || priority[evaluation] > (priority[current] || 0)) {
         key.dataset.state = evaluation;
     }
 }
 
 function resetKeyboard() {
-    keyboardEl.querySelectorAll('.key[data-key]').forEach(key => {
-        delete key.dataset.state;
-    });
+    keyboardEl.querySelectorAll('.key[data-key]').forEach(k => delete k.dataset.state);
 }
 
 // ── Toast ───────────────────────────────────────────────────────────────────
@@ -349,25 +346,18 @@ function showToast(message, duration = 1800) {
     toast.classList.add('toast');
     toast.textContent = message;
     toastContainer.appendChild(toast);
-    setTimeout(() => {
-        if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, duration + 400);
+    setTimeout(() => toast.remove(), duration + 400);
 }
 
 function winMessage(guessCount) {
-    const msgs = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
-    return msgs[Math.min(guessCount - 1, msgs.length - 1)];
+    return ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!']
+    [Math.min(guessCount - 1, 5)];
 }
 
 // ── Game Over ───────────────────────────────────────────────────────────────
 function showGameOver() {
-    if (state.gameWon) {
-        gameOverResult.textContent = `🎉 You got it!`;
-        gameOverAnswer.innerHTML = `The word was <span>${state.answer.toUpperCase()}</span>`;
-    } else {
-        gameOverResult.textContent = `Better luck next time!`;
-        gameOverAnswer.innerHTML = `The word was <span>${state.answer.toUpperCase()}</span>`;
-    }
+    gameOverResult.textContent = state.gameWon ? '🎉 You got it!' : 'Better luck next time!';
+    gameOverAnswer.innerHTML = `The word was <span>${state.answer.toUpperCase()}</span>`;
     gameOverOverlay.style.display = 'flex';
 }
 
@@ -376,33 +366,9 @@ function hideGameOver() {
 }
 
 // ── New Game / Shuffle ──────────────────────────────────────────────────────
-function startNewGame(forceNewWord = false) {
+function startNewGame() {
     hideGameOver();
     resetKeyboard();
-
-    if (forceNewWord || state.gameOver) {
-        state = {
-            answer: pickNewWord(),
-            guesses: [],
-            evaluations: [],
-            currentGuess: '',
-            gameOver: false,
-            gameWon: false,
-            rowIndex: 0,
-        };
-        saveState();
-    }
-
-    buildBoard();
-    restoreBoard();
-    renderCurrentGuess();
-}
-
-function shuffleNewGame() {
-    // Add current word to used if game was in-progress
-    if (!state.gameOver && state.guesses.length > 0) {
-        addUsedWord(state.answer);
-    }
     state = {
         answer: pickNewWord(),
         guesses: [],
@@ -414,7 +380,11 @@ function shuffleNewGame() {
     };
     saveState();
     buildBoard();
-    renderCurrentGuess();
+}
+
+function shuffleNewGame() {
+    if (!state.gameOver && state.guesses.length > 0) addUsedWord(state.answer);
+    startNewGame();
     showToast('New word!', 1000);
 }
 
@@ -426,13 +396,13 @@ function applyDarkMode(isDark) {
     localStorage.setItem(LS_DARK_KEY, isDark ? '1' : '0');
 }
 
-// ── Keyboard Events ─────────────────────────────────────────────────────────
-document.addEventListener('keydown', (e) => {
+// ── Event listeners ─────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     handleKey(e.key);
 });
 
-keyboardEl.addEventListener('click', (e) => {
+keyboardEl.addEventListener('click', e => {
     const key = e.target.closest('.key');
     if (!key) return;
     const k = key.dataset.key;
@@ -441,15 +411,8 @@ keyboardEl.addEventListener('click', (e) => {
     else if (k) handleKey(k);
 });
 
-btnPlayAgain.addEventListener('click', () => startNewGame(true));
-btnShuffle.addEventListener('click', shuffleNewGame);
-btnDarkMode.addEventListener('click', () => {
-    const isDark = !document.body.classList.contains('dark');
-    applyDarkMode(isDark);
-});
-
-// Prevent double-tap zoom on mobile keyboards
-keyboardEl.addEventListener('touchend', (e) => {
+// Prevent double-tap zoom on mobile
+keyboardEl.addEventListener('touchend', e => {
     e.preventDefault();
     const key = e.target.closest('.key');
     if (!key) return;
@@ -459,14 +422,16 @@ keyboardEl.addEventListener('touchend', (e) => {
     else if (k) handleKey(k);
 }, { passive: false });
 
+btnPlayAgain.addEventListener('click', startNewGame);
+btnShuffle.addEventListener('click', shuffleNewGame);
+btnDarkMode.addEventListener('click', () => applyDarkMode(!document.body.classList.contains('dark')));
+
 // ── Initialisation ───────────────────────────────────────────────────────────
 function init() {
-    // Apply dark mode preference
     const savedDark = localStorage.getItem(LS_DARK_KEY);
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    applyDarkMode(savedDark !== null ? savedDark === '1' : prefersDark);
+    const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyDarkMode(savedDark !== null ? savedDark === '1' : preferDark);
 
-    // Load or create state
     const saved = loadState();
     if (saved) {
         state = saved;
@@ -480,4 +445,11 @@ function init() {
     }
 }
 
-init();
+// ── Entry point ──────────────────────────────────────────────────────────────
+// Apply dark mode immediately so there's no flash while words.txt loads
+; (function () {
+    const d = localStorage.getItem(LS_DARK_KEY);
+    applyDarkMode(d !== null ? d === '1' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+})();
+
+loadWordList();
