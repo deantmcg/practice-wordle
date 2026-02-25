@@ -1,0 +1,19 @@
+{
+  "name": "Practice Wordle",
+  "short_name": "PracticeWordle",
+  "description": "Unlimited Wordle practice — no daily limits, no account needed.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "entertainment", "education"]
+}
