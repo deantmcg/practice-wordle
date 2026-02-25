@@ -6,7 +6,7 @@
 /* ── Color Tokens ──────────────────────────────────────── */
 :root {
   /* Greens */
-  --green:   #6aaa64;
+  --green: #6aaa64;
   --green-4: #538d4e;
   /* Yellows */
   --yellow-3: #c9b458;
@@ -21,7 +21,7 @@
   --gray-26: #3a3a3c;
   --gray-27: #424242;
   --gray-29: #afafaf;
-  --wordleBlack:   #212121;
+  --wordleBlack: #212121;
   --wordleBlack-2: #272729;
   --wordleBlack-3: #1a1a1b;
   --wordleBlack-4: #121213;
@@ -42,14 +42,14 @@
   /* Game colors */
   --color-present: var(--yellow-3);
   --color-correct: var(--green);
-  --color-absent:  var(--color-tone-2);
-  --tile-text-color:          var(--color-tone-7);
-  --key-text-color:           var(--color-tone-1);
+  --color-absent: var(--color-tone-2);
+  --tile-text-color: var(--color-tone-7);
+  --key-text-color: var(--color-tone-1);
   --key-evaluated-text-color: var(--color-tone-7);
-  --key-bg:                   var(--color-tone-4);
-  --key-bg-present:           var(--color-present);
-  --key-bg-correct:           var(--color-correct);
-  --key-bg-absent:            var(--color-absent);
+  --key-bg: var(--color-tone-4);
+  --key-bg-present: var(--color-present);
+  --key-bg-correct: var(--color-correct);
+  --key-bg-absent: var(--color-absent);
 
   /* Layout */
   --header-height: 50px;
@@ -71,20 +71,27 @@ body.dark {
 
   --color-present: var(--yellow-4);
   --color-correct: var(--green-4);
-  --color-absent:  var(--color-tone-4);
-  --tile-text-color:          var(--color-tone-1);
-  --key-text-color:           var(--color-tone-1);
+  --color-absent: var(--color-tone-4);
+  --tile-text-color: var(--color-tone-1);
+  --key-text-color: var(--color-tone-1);
   --key-evaluated-text-color: #f8f8f8;
-  --key-bg:        var(--color-tone-2);
+  --key-bg: var(--color-tone-2);
   --key-bg-present: var(--color-present);
   --key-bg-correct: var(--color-correct);
-  --key-bg-absent:  var(--color-absent);
+  --key-bg-absent: var(--color-absent);
 }
 
 /* ── Reset & Base ──────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-html, body {
+html,
+body {
   height: 100%;
   font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
   background-color: var(--color-background);
@@ -95,7 +102,11 @@ html, body {
   overflow: hidden;
 }
 
-button { cursor: pointer; border: none; background: none; }
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
 
 /* ── Game App Shell ────────────────────────────────────── */
 .game-app {
@@ -105,6 +116,8 @@ button { cursor: pointer; border: none; background: none; }
   max-width: var(--game-max-width);
   margin: 0 auto;
   position: relative;
+  /* Clear iPhone home indicator */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* ── Header ────────────────────────────────────────────── */
@@ -135,7 +148,9 @@ button { cursor: pointer; border: none; background: none; }
   min-width: 80px;
 }
 
-.header-right { justify-content: flex-end; }
+.header-right {
+  justify-content: flex-end;
+}
 
 .header-center {
   flex: 1;
@@ -145,12 +160,16 @@ button { cursor: pointer; border: none; background: none; }
 }
 
 .header-title {
-  font-size: 1.4rem;
+  font-size: clamp(0.9rem, 4vw, 1.4rem);
   font-weight: 700;
-  letter-spacing: 0.05rem;
+  letter-spacing: 0.04em;
   color: var(--color-tone-1);
   text-transform: uppercase;
   user-select: none;
+  white-space: nowrap;
+  /* Never wrap to a second line */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-btn {
@@ -165,8 +184,13 @@ button { cursor: pointer; border: none; background: none; }
   transition: background-color 0.15s;
 }
 
-.header-btn:hover { background-color: var(--color-tone-5); }
-.header-btn svg path { fill: var(--color-tone-1); }
+.header-btn:hover {
+  background-color: var(--color-tone-5);
+}
+
+.header-btn svg path {
+  fill: var(--color-tone-1);
+}
 
 /* Shuffle button gets a distinct style */
 .shuffle-btn {
@@ -180,8 +204,14 @@ button { cursor: pointer; border: none; background: none; }
   color: white;
   letter-spacing: 0.03em;
 }
-.shuffle-btn svg path { fill: white; }
-.shuffle-btn:hover { background-color: var(--green-4); }
+
+.shuffle-btn svg path {
+  fill: white;
+}
+
+.shuffle-btn:hover {
+  background-color: var(--green-4);
+}
 
 /* ── Game Container ────────────────────────────────────── */
 .game-container {
@@ -207,8 +237,10 @@ button { cursor: pointer; border: none; background: none; }
   display: grid;
   grid-template-rows: repeat(6, 1fr);
   gap: var(--tile-gap);
-  width: min(350px, calc(100vw - 40px));
-  height: min(420px, calc(100vw - 40px) * 1.2);
+  width: min(350px, calc(100vw - 32px));
+  /* Never taller than the space between header and keyboard */
+  height: min(min(420px, calc(100vw - 32px) * 1.2),
+      calc(100dvh - var(--header-height) - 210px - env(safe-area-inset-bottom)));
 }
 
 /* ── Row ───────────────────────────────────────────────── */
@@ -249,23 +281,40 @@ button { cursor: pointer; border: none; background: none; }
   color: white;
   border-color: transparent;
 }
+
 body.dark .tile[data-state="correct"],
 body.dark .tile[data-state="present"],
 body.dark .tile[data-state="absent"] {
   color: var(--color-tone-1);
 }
 
-.tile[data-state="correct"] { background-color: var(--color-correct); }
-.tile[data-state="present"]  { background-color: var(--color-present); }
-.tile[data-state="absent"]   { background-color: var(--color-absent);  }
+.tile[data-state="correct"] {
+  background-color: var(--color-correct);
+}
+
+.tile[data-state="present"] {
+  background-color: var(--color-present);
+}
+
+.tile[data-state="absent"] {
+  background-color: var(--color-absent);
+}
 
 /* ── Tile Animations ────────────────────────────────────── */
 
 /* Pop on letter input */
 @keyframes tile-pop {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.12); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.12);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .tile.pop {
@@ -274,15 +323,31 @@ body.dark .tile[data-state="absent"] {
 
 /* Flip-reveal animation */
 @keyframes tile-flip-out {
-  0%   { transform: rotateX(0deg); }
-  50%  { transform: rotateX(-90deg); }
-  100% { transform: rotateX(-90deg); }
+  0% {
+    transform: rotateX(0deg);
+  }
+
+  50% {
+    transform: rotateX(-90deg);
+  }
+
+  100% {
+    transform: rotateX(-90deg);
+  }
 }
 
 @keyframes tile-flip-in {
-  0%   { transform: rotateX(-90deg); }
-  50%  { transform: rotateX(-90deg); }
-  100% { transform: rotateX(0deg); }
+  0% {
+    transform: rotateX(-90deg);
+  }
+
+  50% {
+    transform: rotateX(-90deg);
+  }
+
+  100% {
+    transform: rotateX(0deg);
+  }
 }
 
 .tile.flip-out {
@@ -295,13 +360,33 @@ body.dark .tile[data-state="absent"] {
 
 /* Shake animation for invalid word */
 @keyframes row-shake {
-  0%   { transform: translateX(0); }
-  10%  { transform: translateX(-4px); }
-  30%  { transform: translateX(4px); }
-  50%  { transform: translateX(-4px); }
-  70%  { transform: translateX(4px); }
-  90%  { transform: translateX(-4px); }
-  100% { transform: translateX(0); }
+  0% {
+    transform: translateX(0);
+  }
+
+  10% {
+    transform: translateX(-4px);
+  }
+
+  30% {
+    transform: translateX(4px);
+  }
+
+  50% {
+    transform: translateX(-4px);
+  }
+
+  70% {
+    transform: translateX(4px);
+  }
+
+  90% {
+    transform: translateX(-4px);
+  }
+
+  100% {
+    transform: translateX(0);
+  }
 }
 
 .row.shake {
@@ -310,11 +395,25 @@ body.dark .tile[data-state="absent"] {
 
 /* Bounce animation for win */
 @keyframes tile-bounce {
-  0%   { transform: translateY(0); }
-  40%  { transform: translateY(-20px); }
-  60%  { transform: translateY(-10px); }
-  80%  { transform: translateY(-16px); }
-  100% { transform: translateY(0); }
+  0% {
+    transform: translateY(0);
+  }
+
+  40% {
+    transform: translateY(-20px);
+  }
+
+  60% {
+    transform: translateY(-10px);
+  }
+
+  80% {
+    transform: translateY(-16px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 .tile.bounce {
@@ -346,14 +445,14 @@ body.dark .tile[data-state="absent"] {
 }
 
 .key {
-  height: 58px;
+  height: clamp(42px, 7.5dvh, 58px);
   flex: 1;
   min-width: 0;
   max-width: 43px;
   border-radius: 4px;
   background-color: var(--key-bg);
   color: var(--key-text-color);
-  font-size: 0.8rem;
+  font-size: clamp(0.7rem, 2vw, 0.8rem);
   font-weight: 700;
   font-family: inherit;
   text-transform: uppercase;
@@ -421,13 +520,25 @@ body.dark .tile[data-state="absent"] {
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes toast-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 /* ── Game Over Overlay ──────────────────────────────────── */
@@ -439,7 +550,7 @@ body.dark .tile[data-state="absent"] {
   align-items: flex-end;
   justify-content: center;
   pointer-events: none;
-  padding-bottom: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 
 .game-over-card {
@@ -452,15 +563,22 @@ body.dark .tile[data-state="absent"] {
   align-items: center;
   gap: 12px;
   pointer-events: all;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   animation: card-rise 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   min-width: 240px;
   text-align: center;
 }
 
 @keyframes card-rise {
-  from { opacity: 0; transform: translateY(30px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .game-over-result {
@@ -498,27 +616,33 @@ body.dark .tile[data-state="absent"] {
   margin-top: 4px;
 }
 
-.play-again-btn:hover { background-color: var(--green-4); }
-.play-again-btn:active { transform: scale(0.97); }
+.play-again-btn:hover {
+  background-color: var(--green-4);
+}
+
+.play-again-btn:active {
+  transform: scale(0.97);
+}
 
 /* ── Responsive ─────────────────────────────────────────── */
-@media (max-width: 360px) {
-  .key { height: 50px; font-size: 0.75rem; }
-  .key-wide { font-size: 0.7rem; }
-  .header-title { font-size: 1.1rem; }
-}
+/* Tighten keyboard gap on small phones */
+@media (max-width: 380px) {
+  .keyboard-row {
+    gap: 4px;
+  }
 
-@media (min-height: 700px) {
-  .board {
-    width: min(380px, calc(100vw - 40px));
-    height: min(456px, calc(100vw - 40px) * 1.2);
+  .keyboard {
+    gap: 6px;
+  }
+
+  .key-wide {
+    font-size: 0.68rem;
   }
 }
 
-@media (min-height: 800px) {
+/* Allow slightly larger board on tall phones (but dvh constraint still wins) */
+@media (min-height: 750px) {
   .board {
-    width: min(420px, calc(100vw - 40px));
-    height: min(504px, calc(100vw - 40px) * 1.2);
+    width: min(370px, calc(100vw - 32px));
   }
-  .key { height: 58px; }
 }
